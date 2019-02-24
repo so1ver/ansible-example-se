@@ -1,0 +1,15 @@
+---
+# Docker version for installing
+docker_version: '5:18.09.2~3-0~{{ ansible_distribution|lower }}-{{ ansible_distribution_release }}'
+
+# release channel
+docker_apt_release_channel: 'stable'
+
+# URL of apt repository.
+docker_apt_repository: 'deb https://download.docker.com/linux/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} {{ docker_apt_release_channel }}'
+
+# app image name
+docker_image_name: 'web'
+
+# app version
+docker_image_tag: 'v1'

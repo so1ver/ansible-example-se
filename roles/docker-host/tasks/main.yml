@@ -1,0 +1,115 @@
+---
+# check docker dependencies
+- name: 'install docker dependencies'
+  apt:
+    name: '{{ item }}'
+    state: 'present'
+  with_items:
+    - 'apt-transport-https'
+    - 'ca-certificates'
+
+
+# add the docker repository's key
+- name: 'add docker repo apt key'
+  apt_key:
+    url: 'https://download.docker.com/linux/ubuntu/gpg'
+    id: '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
+    state: 'present'
+  register: 'add_repository_key'
+  ignore_errors: true
+
+
+# add docker apt repository
+- name: 'add docker repository'
+  apt_repository:
+    repo: '{{ docker_apt_repository }}'
+    state: 'present'
+    update_cache: 'yes'
+
+
+# install docker-ce
+- name: 'install docker'
+  apt:
+    name: 'docker-ce={{ docker_version }}'
+    state: 'present'
+
+
+# enable docker service
+- name: 'enable docker service'
+  service:
+    name: 'docker'
+    state: 'started'
+    enabled: 'yes'
+
+
+# periodic remove stopped containers
+- name: 'set periodic docker system prune'
+  cron:
+    name: 'docker-prune'
+    minute: '0'
+    hour: '*/2'
+    job: 'docker container prune -f'
+
+
+# install python-pip
+- name: 'install python-pip'
+  apt:
+    name: 'python-pip'
+    state: 'present'
+
+
+# install docker-py
+- name: 'install docker-py'
+  pip:
+    name: 'docker-py'
+    state: 'present'
+
+
+# build docker image from Dockerfile
+- name: build Docker image from Dockerfile
+  docker_image:
+    name: "{{ docker_image_name }}"
+    path: "{{ role_path }}/templates/docker/"
+    state: build
+    force: true
+    tag: "{{ docker_image_tag }}"
+  register: image
+
+
+# running the container
+- name: running the container
+  docker_container:
+    image: "{{ docker_image_name }}:{{ docker_image_tag }}"
+    name:  "{{ docker_image_name }}"
+    state: started
+  register: container_output
+
+
+# get the container ip
+- name: get the container ip
+  shell: "docker inspect -f '{''{range .NetworkSettings.Networks}''}{''{.IPAddress}''}{''{end}''}' {{ docker_image_name }}"
+  register: web_ip
+
+
+# waiting until app not started
+- uri:
+    url: http://{{ web_ip.stdout }}
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 5
+  delay: 5
+
+
+# check if container and app started correct
+- uri:
+    url: http://{{ web_ip.stdout }}
+    return_content: yes
+  register: this
+  retries: 5
+  delay: 5
+  failed_when: "'Container characteristics' not in this.content"
+
+
+# echo link to app
+- debug: msg="http://{{ web_ip.stdout }}"
